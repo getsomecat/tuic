@@ -76,7 +76,7 @@ brefore_install() {
     if [[ ! $SYSTEM == "CentOS" ]]; then
         ${PACKAGE_UPDATE[int]}
     fi
-    ${PACKAGE_INSTALL[int]} curl wget sudo socat openssl certbot
+    ${PACKAGE_INSTALL[int]} curl wget sudo socat openssl certbot cronie
     if [[ $SYSTEM == "CentOS" ]]; then
         ${PACKAGE_INSTALL[int]} cronie
         systemctl start crond
