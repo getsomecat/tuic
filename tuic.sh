@@ -217,8 +217,25 @@ create_conf() {
     if [[ -z ${domain_input} ]]; then
         error "域名不能为空" && exit 1
     fi
-    check_80
-    check_cert $email_input $domain_input
+    
+    read -rp "是否自定义证书路径？(y/[n])" is_self_cert
+    if [[ ${is_self_cert} == [yY] ]]; then
+        read -rp "请输入certificate完整路径：" cert_full_path
+        if [[ -e ${cert_full_path} ]]; then
+            cat ${cert_full_path} > ${workspace}/fullchain.pem
+        else
+            error "证书文件${cert_full_path}不存在" && exit 1
+        fi
+        read -rp "请输入private_key完整路径：" key_full_path
+        if [[ -e ${key_full_path} ]]; then
+            cat ${key_full_path} > ${workspace}/private_key.pem
+        else
+            error "秘钥文件${key_full_path}不存在" && exit 1
+        fi
+    else
+        check_80
+        check_cert $email_input $domain_input
+    fi
     read -rp "请为tuic分配端口(留空随机分配)：" port_input
     if [[ -z ${port_input} ]]; then
         port_input=$(find_unused_port)
@@ -237,7 +254,7 @@ create_conf() {
         "private_key": "${workspace}/private_key.pem",
         "congestion_control": "bbr",
         "alpn": ["h3", "spdy/3.1"],
-        "udp_relay_ipv6": false,
+        "udp_relay_ipv6": true,
         "zero_rtt_handshake": false,
         "auth_timeout": "3s",
         "max_idle_time": "10s",
@@ -263,9 +280,6 @@ EOF
 }
 
 uninstall() {
-    if [[ ! -e "$service" ]]; then
-        error "tuic未安装" && back2menu
-    fi
     systemctl stop tuic && \
     systemctl disable --now tuic.service && \
     rm -rf ${workspace} && rm -rf ${service} 
@@ -305,7 +319,7 @@ stop() {
 
 install() {
     ARCH=$(uname -m)
-    if [[ -d "${workspace}" ]]; then
+    if [[ -e "$service" ]]; then
         read -rp "是否重新安装tuic？(y/[n])" input
         case "$input" in
             y)  uninstall ;;
@@ -318,7 +332,9 @@ install() {
     cd ${workspace}
     info "当前工作目录：$(pwd)"
     info "下载tuic文件"
-    URL="https://github.com/EAimTY/tuic/releases/download/tuic-server-1.0.0-rc0/tuic-server-1.0.0-$ARCH-unknown-linux-gnu"
+    REPO_URL="https://api.github.com/repos/EAimTY/tuic/releases/latest"
+    TAG=$(wget -qO- -t1 -T2 ${REPO_URL} | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+    URL="https://github.com/EAimTY/tuic/releases/download/$TAG/$TAG-$ARCH-unknown-linux-gnu"
     wget -N --no-check-certificate $URL -O tuic-server
     chmod +x tuic-server
     create_systemd
